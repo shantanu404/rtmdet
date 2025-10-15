@@ -14,17 +14,14 @@ def select_single_mlvl(mlvl_tensors, batch_id, detach=True):
     return mlvl_tensor_list
 
 
-def filter_scores_and_topk(scores, score_thr, topk, results=None):
+def filter_scores_and_topk(scores, score_thr, results=None):
     valid_mask = scores > score_thr
     scores = scores[valid_mask]
     valid_idxs = torch.nonzero(valid_mask)
 
-    num_topk = min(topk, valid_idxs.size(0))
     # torch.sort is actually faster than .topk (at least on GPUs)
     scores, idxs = scores.sort(descending=True)
-    scores = scores[:num_topk]
-    topk_idxs = valid_idxs[idxs[:num_topk]]
-    keep_idxs, labels = topk_idxs.unbind(dim=1)
+    keep_idxs, labels = valid_idxs.unbind(dim=1)
 
     filtered_results = None
     if results is not None:
