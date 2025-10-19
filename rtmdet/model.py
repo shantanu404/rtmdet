@@ -84,56 +84,17 @@ class RTMDetPost(nn.Module):
             kernel_preds = kernel_preds[keep_idxs]
             batch_priors = batch_priors[keep_idxs]
 
-            mask = self._mask_predict_by_feat_single(mask_feats, kernel_preds, batch_priors)
-            mask = F.interpolate(
-                mask.unsqueeze(0),
+            masks = self._mask_predict_by_feat_single(mask_feats, kernel_preds, batch_priors)
+            masks = F.interpolate(
+                masks.unsqueeze(0),
                 scale_factor=self.mask_stride,
                 mode="bilinear",
             )
-            mask = (mask.sigmoid().squeeze(0) > 0.5).to(torch.bool)
+            masks = (masks.sigmoid().squeeze(0) > 0.5).to(torch.bool)
 
-            results.append(InstanceData(boxes, scores, label, mask))
+            results.append(InstanceData(boxes, scores, label, masks))
 
         return results
-
-    def _bbox_mask_post_process(self, instance_data, mask_feats):
-        stride = self.prior_generator.strides[0][0]
-
-        keep_idxs = batched_nms(
-            instance_data.bboxes, instance_data.scores, instance_data.labels, 0.5
-        )
-        filtered_bboxes = instance_data.bboxes[keep_idxs]
-        filtered_priors = instance_data.priors[keep_idxs]
-        filtered_scores = instance_data.scores[keep_idxs]
-        filtered_labels = instance_data.labels[keep_idxs]
-        filtered_kernels = instance_data.kernels[keep_idxs]
-
-        # process mask
-        mask_logits = self._mask_predict_by_feat_single(
-            mask_feats, filtered_kernels, filtered_priors
-        )
-
-        mask_logits = F.interpolate(
-            mask_logits.unsqueeze(0),
-            scale_factor=stride,
-            mode="bilinear",
-        )
-
-        new_masks = (mask_logits.sigmoid().squeeze(0) > 0.5).to(
-            torch.bool
-        )
-
-        instance_data = InstanceData(
-            bboxes=filtered_bboxes,
-            priors=filtered_priors,
-            scores=filtered_scores,
-            labels=filtered_labels,
-            kernels=filtered_kernels,
-            masks=new_masks,
-        )
-
-        return instance_data
-
 
     def _mask_predict_by_feat_single(self, mask_feats, kernels, priors):
         num_inst = priors.size(0)
@@ -144,9 +105,11 @@ class RTMDetPost(nn.Module):
         points = priors[:, :2].reshape(-1, 1, 2)
         strides = priors[:, 2:].reshape(-1, 1, 2)
 
+        print(points.shape, coord.shape)
         relative_coord = (points - coord).permute(0, 2, 1) / (
             strides[..., 0].reshape(-1, 1, 1) * 8
         )
+
         relative_coord = relative_coord.reshape(num_inst, 2, h, w)
 
         mask_feats = torch.cat(
@@ -209,8 +172,8 @@ class RTMDetPipeline(nn.Module):
             priors=self.priors,
             coord=coord,
             mask_stride=strides[0],
-            nms_pre_threshold=0.3,
-            nms_threshold=0.3,
+            nms_pre_threshold=0.7,
+            nms_threshold=0.7,
         )
 
     def predict(self, imgs, retina_face=True, device="cuda"):
