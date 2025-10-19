@@ -251,7 +251,7 @@ class RTMDetHead(nn.Module):
             results = filter_scores_and_topk(
                 scores,
                 nms_pre_threshold,
-                1000,
+                64,
                 results=dict(
                     bbox_pred=bbox_pred, kernel_pred=kernel_pred, priors=priors
                 ),
@@ -297,20 +297,12 @@ class RTMDetHead(nn.Module):
                 mask_feats, instance_data.kernels, instance_data.priors
             )
 
-            mask_logits = F.interpolate(
-                mask_logits.unsqueeze(0),
-                scale_factor=stride,
-                mode="bilinear",
-            )
-
-            instance_data.masks = (mask_logits.sigmoid().squeeze(0) > 0.5).to(
-                torch.bool
-            )
+            instance_data.masks = mask_logits.sigmoid()
         else:
             h, w = img_meta["img_shape"][:2]
             instance_data.masks = torch.zeros(
                 size=(instance_data.bboxes.size(0), h, w),
-                dtype=torch.bool,
+                dtype=torch.float,
                 device=instance_data.bboxes.device,
             )
 
